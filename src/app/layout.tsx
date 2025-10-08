@@ -6,6 +6,7 @@ import Script from "next/script";
 import { Providers } from "@/lib/providers";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "SportsPro - Premium Sports Equipment & Athletic Wear",
@@ -38,6 +39,7 @@ export default function RootLayout({
           </main>
           <Footer />
         </Providers>
+        <Toaster />
         <VisualEditsMessenger />
       </body>
     </html>
