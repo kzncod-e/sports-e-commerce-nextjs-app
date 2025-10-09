@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { products } from '@/lib/mock-data';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/store/cart-store';
@@ -10,35 +9,114 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ProductCarousel } from '@/components/ProductCarousel';
+import { Product } from '@/types';
 
 export default function ProductDetailPage({ params }: { params: { slug: string } }) {
-  const product = products.find((p) => p.slug === params.slug);
-
-  if (!product) {
-    notFound();
-  }
-
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0]);
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]);
+  const [selectedSize, setSelectedSize] = useState('');
+  const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
 
   const addItem = useCartStore((state) => state.addItem);
 
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/products?id=${params.slug}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          const p = data.data.product;
+          const transformedProduct: Product = {
+            id: String(p.id),
+            slug: String(p.id),
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            category: p.category?.slug || 'uncategorized',
+            brand: 'Premium',
+            images: [p.imageURL || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80'],
+            sizes: ['7', '8', '9', '10', '11', '12'],
+            colors: ['Black', 'White', 'Blue'],
+            inStock: p.stock > 0,
+            featured: false,
+            trending: false,
+            rating: 4.5,
+            reviews: data.data.reviews?.length || 0,
+          };
+          
+          setProduct(transformedProduct);
+          setSelectedSize(transformedProduct.sizes[0]);
+          setSelectedColor(transformedProduct.colors[0]);
+          
+          // Transform related products
+          if (data.data.relatedProducts && data.data.relatedProducts.length > 0) {
+            const related = data.data.relatedProducts.map((rp: any) => ({
+              id: String(rp.id),
+              slug: String(rp.id),
+              name: rp.name,
+              description: rp.description,
+              price: rp.price,
+              category: p.category?.slug || 'uncategorized',
+              brand: 'Premium',
+              images: [rp.imageURL || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80'],
+              sizes: ['7', '8', '9', '10', '11', '12'],
+              colors: ['Black', 'White', 'Blue'],
+              inStock: rp.stock > 0,
+              featured: false,
+              trending: false,
+              rating: 4.5,
+              reviews: 0,
+            }));
+            setRelatedProducts(related);
+          }
+        } else {
+          notFound();
+        }
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        notFound();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [params.slug]);
+
   const handleAddToCart = () => {
-    addItem(product, selectedSize, selectedColor, quantity);
-    setIsAdded(true);
-    setTimeout(() => setIsAdded(false), 2000);
+    if (product) {
+      addItem(product, selectedSize, selectedColor, quantity);
+      setIsAdded(true);
+      setTimeout(() => setIsAdded(false), 2000);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <div className="container mx-auto px-4 py-20">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+            <p className="mt-4 text-muted-foreground">Loading product...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!product) {
+    notFound();
+  }
 
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
-
-  const relatedProducts = products.filter(
-    (p) => p.category === product.category && p.id !== product.id
-  ).slice(0, 4);
 
   return (
     <div className="min-h-screen">
@@ -98,25 +176,27 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
             </motion.div>
 
             {/* Thumbnail Images */}
-            <div className="grid grid-cols-4 gap-4">
-              {product.images.map((image, index) => (
-                <button
-                  key={index}
-                  onClick={() => setSelectedImage(index)}
-                  className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
-                    selectedImage === index
-                      ? 'border-primary'
-                      : 'border-transparent hover:border-muted-foreground'
-                  }`}
-                >
-                  <img
-                    src={image}
-                    alt={`${product.name} ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                </button>
-              ))}
-            </div>
+            {product.images.length > 1 && (
+              <div className="grid grid-cols-4 gap-4">
+                {product.images.map((image, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedImage(index)}
+                    className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
+                      selectedImage === index
+                        ? 'border-primary'
+                        : 'border-transparent hover:border-muted-foreground'
+                    }`}
+                  >
+                    <img
+                      src={image}
+                      alt={`${product.name} ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Product Info */}

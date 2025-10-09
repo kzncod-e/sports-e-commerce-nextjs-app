@@ -1,12 +1,67 @@
 'use client';
 
 import Link from 'next/link';
-import { categories } from '@/lib/mock-data';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
+
+interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  productsCount?: number;
+}
 
 export function FeaturedCollections() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/categories');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          setCategories(data.data.slice(0, 4)); // Show max 4 categories
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Category images mapping
+  const categoryImages: Record<string, string> = {
+    'running': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80',
+    'basketball': 'https://images.unsplash.com/photo-1608245449230-4ac19066d2d0?w=800&q=80',
+    'training': 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80',
+    'soccer': 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800&q=80',
+  };
+
+  if (loading) {
+    return (
+      <section className="py-20 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+            <p className="mt-4 text-muted-foreground">Loading categories...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (categories.length === 0) {
+    return null;
+  }
+
   return (
     <section className="py-20 bg-muted/30">
       <div className="container mx-auto px-4">
@@ -40,7 +95,7 @@ export function FeaturedCollections() {
               >
                 <div className="relative aspect-[4/5] overflow-hidden">
                   <img
-                    src={category.image}
+                    src={categoryImages[category.slug] || categoryImages['training']}
                     alt={category.name}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
@@ -50,6 +105,11 @@ export function FeaturedCollections() {
                     <h3 className="text-2xl font-bold text-white mb-2">
                       {category.name}
                     </h3>
+                    {category.productsCount !== undefined && (
+                      <p className="text-sm text-gray-300 mb-3">
+                        {category.productsCount} {category.productsCount === 1 ? 'product' : 'products'}
+                      </p>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"

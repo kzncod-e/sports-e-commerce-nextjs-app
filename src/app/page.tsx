@@ -5,15 +5,58 @@ import { FeaturedCollections } from '@/components/FeaturedCollections';
 import { ProductCarousel } from '@/components/ProductCarousel';
 import { StatsSection } from '@/components/StatsSection';
 import { NewsletterSection } from '@/components/NewsletterSection';
-import { products } from '@/lib/mock-data';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Zap, Shield, Truck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Product } from '@/types';
 
 export default function Home() {
-  const featuredProducts = products.filter((p) => p.featured);
-  const trendingProducts = products.filter((p) => p.trending);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [trendingProducts, setTrendingProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/products?limit=20');
+        const data = await response.json();
+        
+        if (data.success && data.data.products) {
+          const products = data.data.products.map((p: any) => ({
+            id: String(p.id),
+            slug: String(p.id),
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            category: p.category?.name || 'Uncategorized',
+            brand: 'Premium',
+            images: [p.imageURL || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80'],
+            sizes: ['7', '8', '9', '10', '11', '12'],
+            colors: ['Black', 'White', 'Blue'],
+            inStock: p.stock > 0,
+            featured: false,
+            trending: false,
+            rating: 4.5,
+            reviews: p.reviewsCount || 0,
+          }));
+          
+          // Split products into featured and trending
+          const midpoint = Math.ceil(products.length / 2);
+          setFeaturedProducts(products.slice(0, midpoint));
+          setTrendingProducts(products.slice(midpoint));
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   return (
     <div>
@@ -85,21 +128,34 @@ export default function Home() {
       <FeaturedCollections />
 
       {/* Trending Products */}
-      <ProductCarousel
-        products={trendingProducts}
-        title="Trending Now"
-        subtitle="The hottest picks this season"
-      />
+      {loading ? (
+        <section className="py-20">
+          <div className="container mx-auto px-4">
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+              <p className="mt-4 text-muted-foreground">Loading products...</p>
+            </div>
+          </div>
+        </section>
+      ) : trendingProducts.length > 0 ? (
+        <ProductCarousel
+          products={trendingProducts}
+          title="Trending Now"
+          subtitle="The hottest picks this season"
+        />
+      ) : null}
 
       {/* Stats Section */}
       <StatsSection />
 
       {/* Featured Products */}
-      <ProductCarousel
-        products={featuredProducts}
-        title="Featured Products"
-        subtitle="Handpicked favorites for peak performance"
-      />
+      {!loading && featuredProducts.length > 0 && (
+        <ProductCarousel
+          products={featuredProducts}
+          title="Featured Products"
+          subtitle="Handpicked favorites for peak performance"
+        />
+      )}
 
       {/* CTA Section */}
       <section className="py-20 bg-muted/30">

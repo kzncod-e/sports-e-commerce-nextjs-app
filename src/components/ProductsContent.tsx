@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { products } from '@/lib/mock-data';
+import { useState, useMemo, useEffect } from 'react';
 import { ProductCard } from '@/components/ProductCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +10,15 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
+import { Product } from '@/types';
 
 export function ProductsContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get('category') || '';
 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     initialCategory ? [initialCategory] : []
@@ -25,8 +28,55 @@ export function ProductsContent() {
   const [sortBy, setSortBy] = useState<string>('popular');
   const [showInStockOnly, setShowInStockOnly] = useState(false);
 
-  // Get unique categories and brands
-  const categories = Array.from(new Set(products.map((p) => p.category)));
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch products
+        const productsResponse = await fetch('/api/products?limit=100');
+        const productsData = await productsResponse.json();
+        
+        // Fetch categories
+        const categoriesResponse = await fetch('/api/categories');
+        const categoriesData = await categoriesResponse.json();
+        
+        if (productsData.success && productsData.data.products) {
+          const transformedProducts = productsData.data.products.map((p: any) => ({
+            id: String(p.id),
+            slug: String(p.id),
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            category: p.category?.slug || 'uncategorized',
+            brand: 'Premium',
+            images: [p.imageURL || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80'],
+            sizes: ['7', '8', '9', '10', '11', '12'],
+            colors: ['Black', 'White', 'Blue'],
+            inStock: p.stock > 0,
+            featured: false,
+            trending: false,
+            rating: 4.5,
+            reviews: p.reviewsCount || 0,
+          }));
+          setProducts(transformedProducts);
+        }
+        
+        if (categoriesData.success && categoriesData.data) {
+          const categoryList = categoriesData.data.map((c: any) => c.slug);
+          setCategories(categoryList);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Get unique brands
   const brands = Array.from(new Set(products.map((p) => p.brand)));
 
   // Filter and sort products
@@ -79,7 +129,7 @@ export function ProductsContent() {
     }
 
     return filtered;
-  }, [searchQuery, selectedCategories, selectedBrands, priceRange, sortBy, showInStockOnly]);
+  }, [products, searchQuery, selectedCategories, selectedBrands, priceRange, sortBy, showInStockOnly]);
 
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories((prev) =>
@@ -187,6 +237,27 @@ export function ProductsContent() {
       </Button>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <div className="border-b bg-muted/30">
+          <div className="container mx-auto px-4 py-8">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">All Products</h1>
+            <p className="text-lg text-muted-foreground">
+              Discover our complete collection of premium sports equipment
+            </p>
+          </div>
+        </div>
+        <div className="container mx-auto px-4 py-20">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+            <p className="mt-4 text-muted-foreground">Loading products...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
