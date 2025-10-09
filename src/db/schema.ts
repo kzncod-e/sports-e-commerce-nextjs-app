@@ -100,6 +100,8 @@ export const cartItem = sqliteTable('cart_item', {
   cartId: integer('cart_id').notNull().references(() => cart.id, { onDelete: 'cascade' }),
   productId: integer('product_id').notNull().references(() => product.id),
   quantity: integer('quantity').notNull().default(1),
+  size: text('size'),
+  color: text('color'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

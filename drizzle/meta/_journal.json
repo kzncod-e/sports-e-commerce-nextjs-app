@@ -15,6 +15,13 @@
       "when": 1759847655568,
       "tag": "0001_busy_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1760021465052,
+      "tag": "0002_strong_whizzer",
+      "breakpoints": true
     }
   ]
 }

@@ -86,7 +86,9 @@ export async function POST(request: NextRequest) {
     // Validation schema
     const addItemSchema = z.object({
       productId: z.number().int({ message: "Product ID must be an integer" }),
-      quantity: z.number().int().positive({ message: "Quantity must be a positive integer" }).default(1)
+      quantity: z.number().int().positive({ message: "Quantity must be a positive integer" }).default(1),
+      size: z.string().optional(),
+      color: z.string().optional()
     });
 
     const validationResult = addItemSchema.safeParse(body);
@@ -97,7 +99,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const { productId, quantity } = validationResult.data;
+    const { productId, quantity, size, color } = validationResult.data;
 
     // Verify product exists and has sufficient stock
     const productData = await db.select()
@@ -134,13 +136,27 @@ export async function POST(request: NextRequest) {
 
     const currentCart = userCart[0];
 
-    // Check if item already exists in cart
+    // Check if item already exists in cart with same productId, size, and color
+    const conditions = [
+      eq(cartItem.cartId, currentCart.id),
+      eq(cartItem.productId, productId)
+    ];
+    
+    if (size !== undefined) {
+      conditions.push(eq(cartItem.size, size));
+    } else {
+      conditions.push(sql`${cartItem.size} IS NULL`);
+    }
+    
+    if (color !== undefined) {
+      conditions.push(eq(cartItem.color, color));
+    } else {
+      conditions.push(sql`${cartItem.color} IS NULL`);
+    }
+
     const existingItem = await db.select()
       .from(cartItem)
-      .where(and(
-        eq(cartItem.cartId, currentCart.id),
-        eq(cartItem.productId, productId)
-      ))
+      .where(and(...conditions))
       .limit(1);
 
     let item;
@@ -180,6 +196,8 @@ export async function POST(request: NextRequest) {
           cartId: currentCart.id,
           productId,
           quantity,
+          size: size || null,
+          color: color || null,
           createdAt: now,
           updatedAt: now
         })

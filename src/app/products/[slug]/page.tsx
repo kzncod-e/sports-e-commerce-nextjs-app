@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/store/cart-store';
-import { ShoppingCart, Star, Heart, Share2, Check } from 'lucide-react';
+import { ShoppingCart, Star, Heart, Share2, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -20,6 +20,7 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isAdded, setIsAdded] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const addItem = useCartStore((state) => state.addItem);
 
@@ -89,11 +90,18 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
     fetchProduct();
   }, [params.slug]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (product) {
-      addItem(product, selectedSize, selectedColor, quantity);
-      setIsAdded(true);
-      setTimeout(() => setIsAdded(false), 2000);
+      try {
+        setIsAdding(true);
+        await addItem(product, selectedSize, selectedColor, quantity);
+        setIsAdded(true);
+        setTimeout(() => setIsAdded(false), 2000);
+      } catch (error) {
+        console.error('Failed to add to cart:', error);
+      } finally {
+        setIsAdding(false);
+      }
     }
   };
 
@@ -334,10 +342,21 @@ export default function ProductDetailPage({ params }: { params: { slug: string }
                 size="lg"
                 className="flex-1 text-lg"
                 onClick={handleAddToCart}
-                disabled={!product.inStock}
+                disabled={!product.inStock || isAdding}
               >
                 <AnimatePresence mode="wait">
-                  {isAdded ? (
+                  {isAdding ? (
+                    <motion.span
+                      key="adding"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex items-center"
+                    >
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Adding...
+                    </motion.span>
+                  ) : isAdded ? (
                     <motion.span
                       key="added"
                       initial={{ opacity: 0, y: 10 }}

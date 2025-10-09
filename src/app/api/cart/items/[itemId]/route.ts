@@ -4,8 +4,12 @@ import { cartItem, cart, product } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
-const updateQuantitySchema = z.object({
-  quantity: z.number().int().positive().min(1, 'Quantity must be at least 1'),
+const updateItemSchema = z.object({
+  quantity: z.number().int().positive().min(1, 'Quantity must be at least 1').optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+}).refine(data => data.quantity !== undefined || data.size !== undefined || data.color !== undefined, {
+  message: "At least one field (quantity, size, or color) must be provided"
 });
 
 export async function PUT(
@@ -33,7 +37,7 @@ export async function PUT(
 
     // Parse and validate request body
     const body = await request.json();
-    const validationResult = updateQuantitySchema.safeParse(body);
+    const validationResult = updateItemSchema.safeParse(body);
     
     if (!validationResult.success) {
       return NextResponse.json(
@@ -45,7 +49,7 @@ export async function PUT(
       );
     }
 
-    const { quantity } = validationResult.data;
+    const { quantity, size, color } = validationResult.data;
 
     // Fetch cart item with cart information to verify ownership
     const existingCartItem = await db
@@ -73,35 +77,49 @@ export async function PUT(
       );
     }
 
-    // Fetch product to verify stock availability
-    const productRecord = await db
-      .select()
-      .from(product)
-      .where(eq(product.id, existingCartItem[0].cartItem.productId))
-      .limit(1);
+    // Fetch product to verify stock availability if quantity is being updated
+    if (quantity !== undefined) {
+      const productRecord = await db
+        .select()
+        .from(product)
+        .where(eq(product.id, existingCartItem[0].cartItem.productId))
+        .limit(1);
 
-    if (productRecord.length === 0) {
-      return NextResponse.json(
-        { success: false, message: 'Product not found' },
-        { status: 404 }
-      );
+      if (productRecord.length === 0) {
+        return NextResponse.json(
+          { success: false, message: 'Product not found' },
+          { status: 404 }
+        );
+      }
+
+      // Verify sufficient stock
+      if (quantity > productRecord[0].stock) {
+        return NextResponse.json(
+          { success: false, message: 'Insufficient stock' },
+          { status: 400 }
+        );
+      }
     }
 
-    // Verify sufficient stock
-    if (quantity > productRecord[0].stock) {
-      return NextResponse.json(
-        { success: false, message: 'Insufficient stock' },
-        { status: 400 }
-      );
+    // Build update object
+    const updateData: any = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (quantity !== undefined) {
+      updateData.quantity = quantity;
+    }
+    if (size !== undefined) {
+      updateData.size = size;
+    }
+    if (color !== undefined) {
+      updateData.color = color;
     }
 
-    // Update cart item quantity
+    // Update cart item
     const updatedCartItem = await db
       .update(cartItem)
-      .set({
-        quantity,
-        updatedAt: new Date().toISOString(),
-      })
+      .set(updateData)
       .where(eq(cartItem.id, itemId))
       .returning();
 
