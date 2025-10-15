@@ -39,7 +39,7 @@ export function ProductsContent() {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 300]);
   const [sortBy, setSortBy] = useState<string>("popular");
   const [showInStockOnly, setShowInStockOnly] = useState(false);
-
+  const [order, setOrder] = useState<string>("asc");
   useEffect(() => {
     const params = new URLSearchParams();
     const fetchData = async () => {
@@ -51,10 +51,16 @@ export function ProductsContent() {
           priceRange[0] && params.append("minPrice", priceRange[0].toString());
           priceRange[1] && params.append("maxPrice", priceRange[1].toString());
         }
+        if (sortBy) {
+          params.append("sortBy", sortBy);
+        }
+        if (order) {
+          params.append("order", order);
+        }
         if (selectedCategories.length > 0) {
           selectedCategories.forEach((cat) => params.append("category", cat));
         }
-        const debouce = setTimeout(async () => {
+        const debounce = setTimeout(async () => {
           const productsResponse = await fetch(
             `/api/products?${params.toString()}`
           );
@@ -70,7 +76,9 @@ export function ProductsContent() {
                 name: p.name,
                 description: p.description,
                 price: p.price,
-                category: p.category?.slug || "uncategorized",
+                category: categories.find((c) => c.id === p.categoryId)
+                  ? categories.find((c) => c.id === p.categoryId)!.name
+                  : "Uncategorized",
                 brand: "Premium",
                 images: [
                   p.imageURL ||
@@ -87,6 +95,7 @@ export function ProductsContent() {
             );
             setProducts(transformedProducts);
           }
+          return () => clearTimeout(debounce);
         }, 1000);
         const categoriesResponse = await fetch("/api/categories");
         const categoriesData = await categoriesResponse.json();
@@ -101,7 +110,7 @@ export function ProductsContent() {
     };
 
     fetchData();
-  }, [selectedCategories, selectedBrands]);
+  }, [selectedCategories, selectedBrands, priceRange, sortBy, order]);
 
   // Get unique brands
   const brands = Array.from(new Set(products.map((p) => p.brand)));
@@ -174,7 +183,21 @@ export function ProductsContent() {
   //   sortBy,
   //   showInStockOnly,
   // ]);
-
+  const handleSortChange = (value: string) => {
+    if (value === "price-asc") {
+      setOrder("asc");
+      setSortBy("price");
+    } else if (value === "price-desc") {
+      setOrder("desc");
+      setSortBy("price");
+    } else if (value === "newest") {
+      setOrder("desc");
+      setSortBy("createdAt");
+    } else {
+      setOrder("desc");
+      setSortBy("popular");
+    }
+  };
   const handleCategoryToggle = (category: string) => {
     setSelectedCategories((prev) =>
       prev.includes(category)
@@ -355,7 +378,7 @@ export function ProductsContent() {
               </div>
 
               <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortBy} onValueChange={handleSortChange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>

@@ -178,12 +178,96 @@ export async function GET(request: NextRequest) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const sortColumn =
-      sortBy === "price"
-        ? product.price
-        : sortBy === "name"
-          ? product.name
-          : product.createdAt;
+    let sortColumn;
+
+    if (sortBy === "price") {
+      sortColumn = product.price;
+    } else if (sortBy === "createdAt") {
+      sortColumn = product.createdAt;
+    } else if (sortBy === "popular") {
+      const productsData = await db
+        .select({
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          stock: product.stock,
+          imageURL: product.imageURL,
+          categoryId: product.categoryId,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
+          // COALESCE adalah fungsi SQL yang mengembalikan nilai pertama yang bukan NULL dari daftar argumen.
+          // Di sini, kita menggunakan COALESCE untuk memastikan bahwa jika tidak ada ulasan (review) untuk produk tertentu,
+          // maka avgRating akan menjadi 0, bukan NULL.
+          // Ini membantu menghindari masalah ketika kita mencoba mengurutkan produk berdasarkan avgRating.
+          avgRating: sql`COALESCE(AVG(${review.rating}), 0)`.as("avgRating"),
+        })
+        .from(product)
+        //leftJoin adalah JOIN di SQL (lebih tepatnya LEFT OUTER JOIN).
+        // Artinya: ambil semua data dari tabel kiri (di sini product),
+        // dan tambahkan data dari tabel kanan (review) jika cocok berdasarkan kondisi yang lu kasih (eq(product.id, review.productId)).
+        .leftJoin(review, eq(product.id, review.productId))
+        .where(whereClause)
+        .groupBy(product.id)
+        .orderBy(
+          order === "asc"
+            ? sql`AVG(${review.rating}) ASC`
+            : sql`AVG(${review.rating}) DESC`
+        )
+        .limit(limit)
+        .offset(offset);
+
+      const countResult = await db
+        .select({ count: sql<number>`count(distinct ${product.id})` })
+        .from(product)
+        .leftJoin(review, eq(product.id, review.productId))
+        .where(whereClause);
+
+      const total = countResult[0].count;
+      const totalPages = Math.ceil(total / limit);
+
+      const productsWithDetails = await Promise.all(
+        productsData.map(async (prod) => {
+          let categoryData = null;
+          if (prod.categoryId) {
+            const categoryResult = await db
+              .select()
+              .from(category)
+              .where(eq(category.id, prod.categoryId))
+              .limit(1);
+            categoryData = categoryResult.length > 0 ? categoryResult[0] : null;
+          }
+
+          const reviewCountResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(review)
+            .where(eq(review.productId, prod.id));
+          const reviewsCount = reviewCountResult[0].count;
+
+          return {
+            ...prod,
+            category: categoryData,
+            reviewsCount,
+          };
+        })
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          products: productsWithDetails,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages,
+          },
+        },
+      });
+    } else {
+      sortColumn = product.createdAt;
+    }
+
     const sortOrder = order === "asc" ? asc(sortColumn) : desc(sortColumn);
 
     const productsQuery = db
